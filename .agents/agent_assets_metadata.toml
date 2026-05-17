@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "0F2KG1JArpstQRumjaLae"
+uri = "file://artifacts/trademind-ai/assets/images/icon.png"
+type = "image"
+title = "generated_image"
