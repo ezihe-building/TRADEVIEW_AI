@@ -30,7 +30,15 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TradeMind AI uses your photo library to analyze chart screenshots.",
+          "cameraPermission": "TradeMind AI uses your camera to capture live chart images for AI analysis."
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,9 +34,7 @@ export default function AnalysisDetailScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.notFound, { paddingTop: topInset + 60 }]}>
           <Feather name="alert-circle" size={48} color={colors.mutedForeground} />
-          <Text style={[styles.notFoundText, { color: colors.mutedForeground }]}>
-            Analysis not found
-          </Text>
+          <Text style={[styles.notFoundText, { color: colors.mutedForeground }]}>Analysis not found</Text>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={[styles.backLink, { color: colors.accent }]}>Go back</Text>
           </TouchableOpacity>
@@ -45,35 +44,33 @@ export default function AnalysisDetailScreen() {
   }
 
   const directionColor =
-    analysis.direction === "long"
-      ? colors.bullish
-      : analysis.direction === "short"
-        ? colors.bearish
-        : colors.neutral;
+    analysis.direction === "long" ? colors.bullish :
+    analysis.direction === "short" ? colors.bearish : colors.neutral;
 
   const directionLabel =
-    analysis.direction === "long"
-      ? "LONG"
-      : analysis.direction === "short"
-        ? "SHORT"
-        : "WAIT";
+    analysis.direction === "long" ? "LONG" :
+    analysis.direction === "short" ? "SHORT" : "WAIT";
 
-  const directionIcon =
-    analysis.direction === "long"
-      ? "arrow-up-right"
-      : analysis.direction === "short"
-        ? "arrow-down-right"
-        : "pause";
+  const directionIcon: any =
+    analysis.direction === "long" ? "arrow-up-right" :
+    analysis.direction === "short" ? "arrow-down-right" : "pause";
+
+  const gradientColors: [string, string] =
+    analysis.sentiment === "bullish"
+      ? [colors.bullish + "18", colors.background]
+      : analysis.sentiment === "bearish"
+        ? [colors.bearish + "18", colors.background]
+        : [colors.neutral + "10", colors.background];
+
+  const rr = (analysis as any).riskRewardRatio;
+  const keyLevels = (analysis as any).keyLevels;
+  const tradeManagement = (analysis as any).tradeManagement;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { paddingTop: topInset + 8, borderBottomColor: colors.border },
-        ]}
-      >
+      <LinearGradient colors={gradientColors} style={styles.gradient} />
+
+      <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={[styles.backBtn, { backgroundColor: colors.surface }]}
@@ -82,9 +79,7 @@ export default function AnalysisDetailScreen() {
           <Feather name="arrow-left" size={18} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.headerPair, { color: colors.foreground }]}>
-            {analysis.pair}
-          </Text>
+          <Text style={[styles.headerPair, { color: colors.foreground }]}>{analysis.pair}</Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
             {analysis.timeframe} · {analysis.marketType.toUpperCase()}
           </Text>
@@ -92,11 +87,8 @@ export default function AnalysisDetailScreen() {
         <SentimentBadge sentiment={analysis.sentiment} size="sm" />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-      >
-        {/* Chart Image */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+
         {analysis.imageUri ? (
           <Image
             source={{ uri: analysis.imageUri }}
@@ -104,81 +96,63 @@ export default function AnalysisDetailScreen() {
             resizeMode="contain"
           />
         ) : (
-          <View
-            style={[
-              styles.noImage,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
+          <View style={[styles.noImage, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Feather name="image" size={32} color={colors.mutedForeground} />
-            <Text style={[styles.noImageText, { color: colors.mutedForeground }]}>
-              No chart image
-            </Text>
+            <Text style={[styles.noImageText, { color: colors.mutedForeground }]}>No chart image</Text>
           </View>
         )}
 
-        {/* Signal Summary */}
         <GlassCard
-          glow={
-            analysis.sentiment === "bullish"
-              ? "green"
-              : analysis.sentiment === "bearish"
-                ? "red"
-                : "none"
-          }
-          style={styles.summaryCard}
+          glow={analysis.sentiment === "bullish" ? "green" : analysis.sentiment === "bearish" ? "red" : "none"}
+          style={styles.signalCard}
         >
-          <View style={styles.summaryHeader}>
-            <View
-              style={[
-                styles.directionBig,
-                {
-                  backgroundColor: directionColor + "22",
-                  borderColor: directionColor + "55",
-                },
-              ]}
-            >
-              <Feather name={directionIcon as any} size={24} color={directionColor} />
-              <Text style={[styles.directionLabel, { color: directionColor }]}>
-                {directionLabel}
-              </Text>
+          <View style={styles.signalTop}>
+            <View style={[styles.directionPill, { backgroundColor: directionColor + "22", borderColor: directionColor + "55" }]}>
+              <Feather name={directionIcon} size={22} color={directionColor} />
+              <Text style={[styles.directionLabel, { color: directionColor }]}>{directionLabel}</Text>
             </View>
-            <View style={styles.summaryRight}>
+            <View style={styles.signalMeta}>
               <RiskBadge risk={analysis.riskLevel} />
-              <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
-                {new Date(analysis.timestamp).toLocaleString()}
-              </Text>
+              {rr && (
+                <View style={[styles.rrPill, { backgroundColor: colors.accent + "22", borderColor: colors.accent + "33" }]}>
+                  <Text style={[styles.rrText, { color: colors.accent }]}>R:R {rr}</Text>
+                </View>
+              )}
             </View>
           </View>
+
           <ConfidenceBar confidence={analysis.confidence} />
+
+          <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
+            {new Date(analysis.timestamp).toLocaleString()}
+          </Text>
         </GlassCard>
 
-        {/* Key Levels */}
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Key Levels
-        </Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Trade Levels</Text>
         <View style={styles.levelsRow}>
           <LevelCard label="Entry Zone" value={analysis.entry} color={colors.accent} icon="target" />
           <LevelCard label="Stop Loss" value={analysis.stopLoss} color={colors.bearish} icon="shield-off" />
           <LevelCard label="Take Profit" value={analysis.takeProfit} color={colors.bullish} icon="trending-up" />
         </View>
 
-        {/* Patterns & Indicators */}
+        {keyLevels && (keyLevels.support !== "N/A" || keyLevels.resistance !== "N/A") && (
+          <>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Key Levels</Text>
+            <View style={styles.levelsRow}>
+              <LevelCard label="Support" value={keyLevels.support ?? "N/A"} color={colors.bullish} icon="arrow-down" />
+              <LevelCard label="Resistance" value={keyLevels.resistance ?? "N/A"} color={colors.bearish} icon="arrow-up" />
+            </View>
+          </>
+        )}
+
         {analysis.patterns.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              Detected Patterns
-            </Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Detected Patterns</Text>
             <GlassCard style={styles.tagsCard}>
               <View style={styles.tagWrap}>
                 {analysis.patterns.map((p) => (
-                  <View
-                    key={p}
-                    style={[
-                      styles.tag,
-                      { backgroundColor: colors.accent + "22", borderColor: colors.accent + "44" },
-                    ]}
-                  >
+                  <View key={p} style={[styles.tag, { backgroundColor: colors.accent + "22", borderColor: colors.accent + "44" }]}>
+                    <Feather name="eye" size={11} color={colors.accent} />
                     <Text style={[styles.tagText, { color: colors.accent }]}>{p}</Text>
                   </View>
                 ))}
@@ -189,19 +163,12 @@ export default function AnalysisDetailScreen() {
 
         {analysis.indicators.length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              Indicator Signals
-            </Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Indicator Signals</Text>
             <GlassCard style={styles.tagsCard}>
               <View style={styles.tagWrap}>
                 {analysis.indicators.map((ind) => (
-                  <View
-                    key={ind}
-                    style={[
-                      styles.tag,
-                      { backgroundColor: colors.primary + "22", borderColor: colors.primary + "44" },
-                    ]}
-                  >
+                  <View key={ind} style={[styles.tag, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "44" }]}>
+                    <Feather name="activity" size={11} color={colors.primary} />
                     <Text style={[styles.tagText, { color: colors.primary }]}>{ind}</Text>
                   </View>
                 ))}
@@ -210,82 +177,62 @@ export default function AnalysisDetailScreen() {
           </>
         )}
 
-        {/* Strategy */}
-        {analysis.strategy ? (
+        {analysis.strategy && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              Recommended Strategy
-            </Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Strategy</Text>
             <GlassCard glow="blue" style={styles.strategyCard}>
-              <Feather name="cpu" size={16} color={colors.accent} />
-              <Text style={[styles.strategyText, { color: colors.foreground }]}>
-                {analysis.strategy}
-              </Text>
+              <View style={[styles.strategyIconWrap, { backgroundColor: colors.accent + "22", borderColor: colors.accent + "33" }]}>
+                <Feather name="cpu" size={16} color={colors.accent} />
+              </View>
+              <Text style={[styles.strategyText, { color: colors.foreground }]}>{analysis.strategy}</Text>
             </GlassCard>
           </>
-        ) : null}
+        )}
 
-        {/* Reasoning */}
-        {analysis.reasoning ? (
+        {analysis.reasoning && (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              AI Reasoning
-            </Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>AI Analysis</Text>
             <GlassCard style={styles.reasoningCard}>
-              <Text style={[styles.reasoningText, { color: colors.foreground }]}>
-                {analysis.reasoning}
-              </Text>
+              <View style={styles.reasoningHeader}>
+                <View style={[styles.aiDot, { backgroundColor: colors.primary }]} />
+                <Text style={[styles.reasoningLabel, { color: colors.primary }]}>TradeMind AI Reasoning</Text>
+              </View>
+              <Text style={[styles.reasoningText, { color: colors.foreground }]}>{analysis.reasoning}</Text>
             </GlassCard>
           </>
-        ) : null}
+        )}
 
-        {/* Disclaimer */}
-        <GlassCard style={styles.disclaimer}>
-          <Feather name="alert-triangle" size={14} color={colors.neutral} />
-          <Text style={[styles.disclaimerText, { color: colors.mutedForeground }]}>
-            This analysis is for educational purposes only. Not financial advice. Past patterns do not guarantee future results.
-          </Text>
-        </GlassCard>
+        {tradeManagement && tradeManagement !== "N/A" && (
+          <>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Trade Management</Text>
+            <GlassCard style={[styles.managementCard, { borderColor: colors.neutral + "44" }]}>
+              <Feather name="sliders" size={16} color={colors.neutral} />
+              <Text style={[styles.managementText, { color: colors.foreground }]}>{tradeManagement}</Text>
+            </GlassCard>
+          </>
+        )}
 
-        {/* New Analysis CTA */}
         <TouchableOpacity
-          style={[styles.newBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          style={[styles.newBtn, { borderColor: colors.primary + "55", backgroundColor: colors.primary + "11" }]}
           onPress={async () => {
             await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             router.push("/(tabs)/analyzer");
           }}
           activeOpacity={0.8}
         >
-          <Feather name="plus" size={16} color={colors.accent} />
-          <Text style={[styles.newBtnText, { color: colors.accent }]}>
-            New Analysis
-          </Text>
+          <Feather name="plus" size={16} color={colors.primary} />
+          <Text style={[styles.newBtnText, { color: colors.primary }]}>New Analysis</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-function LevelCard({
-  label,
-  value,
-  color,
-  icon,
-}: {
-  label: string;
-  value: string;
-  color: string;
-  icon: any;
-}) {
+function LevelCard({ label, value, color, icon }: { label: string; value: string; color: string; icon: any }) {
   const colors = useColors();
   return (
     <GlassCard style={styles.levelCard}>
-      <View
-        style={[
-          styles.levelIcon,
-          { backgroundColor: color + "22", borderColor: color + "44" },
-        ]}
-      >
+      <View style={[styles.levelIcon, { backgroundColor: color + "22", borderColor: color + "44" }]}>
         <Feather name={icon} size={14} color={color} />
       </View>
       <Text style={[styles.levelLabel, { color: colors.mutedForeground }]}>{label}</Text>
@@ -296,105 +243,67 @@ function LevelCard({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  gradient: { position: "absolute", top: 0, left: 0, right: 0, height: 280 },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    gap: 12,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 12,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  backBtn: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   headerCenter: { flex: 1 },
   headerPair: { fontFamily: "Inter_700Bold", fontSize: 18 },
   headerSub: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 1 },
   scroll: { padding: 16, gap: 16, paddingBottom: 40 },
-  chartImage: {
-    width: "100%",
-    height: 220,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
+  chartImage: { width: "100%", height: 220, borderRadius: 12, borderWidth: 1 },
   noImage: {
-    width: "100%",
-    height: 160,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderStyle: "dashed",
+    width: "100%", height: 160, borderRadius: 12, borderWidth: 1,
+    alignItems: "center", justifyContent: "center", gap: 8, borderStyle: "dashed",
   },
   noImageText: { fontFamily: "Inter_400Regular", fontSize: 13 },
-  summaryCard: { gap: 14 },
-  summaryHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  signalCard: { gap: 12 },
+  signalTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  directionPill: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1,
   },
-  directionBig: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
+  directionLabel: { fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: 2 },
+  signalMeta: { alignItems: "flex-end", gap: 6 },
+  rrPill: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1,
   },
-  directionLabel: { fontFamily: "Inter_700Bold", fontSize: 16, letterSpacing: 1 },
-  summaryRight: { alignItems: "flex-end", gap: 6 },
+  rrText: { fontFamily: "Inter_700Bold", fontSize: 12 },
   timestamp: { fontFamily: "Inter_400Regular", fontSize: 11 },
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 16 },
   levelsRow: { flexDirection: "row", gap: 10 },
   levelCard: { flex: 1, alignItems: "center", gap: 6, padding: 12 },
   levelIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 32, height: 32, borderRadius: 9, borderWidth: 1,
+    alignItems: "center", justifyContent: "center",
   },
-  levelLabel: { fontFamily: "Inter_400Regular", fontSize: 11 },
-  levelValue: { fontFamily: "Inter_700Bold", fontSize: 14 },
+  levelLabel: { fontFamily: "Inter_400Regular", fontSize: 10 },
+  levelValue: { fontFamily: "Inter_700Bold", fontSize: 13, textAlign: "center" },
   tagsCard: { padding: 14 },
   tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tag: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1,
   },
   tagText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
-  strategyCard: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "flex-start",
+  strategyCard: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  strategyIconWrap: {
+    width: 32, height: 32, borderRadius: 9, borderWidth: 1,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
   strategyText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 22, flex: 1 },
-  reasoningCard: { padding: 16 },
-  reasoningText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 22 },
-  disclaimer: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "flex-start",
-    padding: 12,
-  },
-  disclaimerText: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 18, flex: 1 },
+  reasoningCard: { padding: 16, gap: 10 },
+  reasoningHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  aiDot: { width: 8, height: 8, borderRadius: 4 },
+  reasoningLabel: { fontFamily: "Inter_600SemiBold", fontSize: 12, letterSpacing: 0.5 },
+  reasoningText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 24 },
+  managementCard: { flexDirection: "row", gap: 12, alignItems: "flex-start", borderWidth: 1 },
+  managementText: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 22, flex: 1 },
   newBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1,
   },
   newBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   notFound: { flex: 1, alignItems: "center", gap: 12, paddingHorizontal: 40 },

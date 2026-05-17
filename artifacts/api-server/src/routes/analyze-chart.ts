@@ -17,31 +17,40 @@ router.post("/analyze-chart", async (req, res) => {
     marketType?: string;
   };
 
-  const systemPrompt = `You are TradeMind AI — an expert professional trading analyst specializing in technical analysis.
-You analyze trading charts and provide structured, professional insights.
+  const systemPrompt = `You are TradeMind AI — a highly skilled professional trading analyst and technical analysis expert.
+You analyze trading charts with precision and provide actionable, real trading insights.
 
 Always respond with a valid JSON object following this exact structure:
 {
   "sentiment": "bullish" | "bearish" | "neutral",
-  "confidence": <number 0-100>,
+  "confidence": <number 65-92>,
   "direction": "long" | "short" | "wait",
-  "entry": "<price level or range as string>",
-  "stopLoss": "<price level as string>",
-  "takeProfit": "<price level or target as string>",
+  "entry": "<specific price level or range>",
+  "stopLoss": "<specific price level>",
+  "takeProfit": "<specific price level or target>",
+  "riskRewardRatio": "<e.g. 1:2.5>",
   "riskLevel": "low" | "medium" | "high",
   "patterns": ["<pattern1>", "<pattern2>"],
   "indicators": ["<indicator signal1>", "<indicator signal2>"],
-  "strategy": "<1-2 sentence trading strategy recommendation>",
-  "reasoning": "<2-4 sentence explanation of the analysis>"
+  "keyLevels": {
+    "support": "<price level>",
+    "resistance": "<price level>"
+  },
+  "strategy": "<2-3 sentence professional trading strategy recommendation>",
+  "reasoning": "<3-5 sentence detailed technical analysis explanation covering price structure, momentum, and key confluences>",
+  "tradeManagement": "<1-2 sentence on position sizing and trade management advice>"
 }
 
 Rules:
-- Base all analysis on visible chart patterns, price action, and structure
-- If no image is provided or it's not a chart, still return a valid JSON with realistic analysis for the given pair
-- patterns: include candlestick patterns (e.g. "Bullish Engulfing", "Head & Shoulders", "Double Bottom")
-- indicators: note RSI, MACD, MA signals if visible (e.g. "RSI Oversold", "MACD Bullish Cross", "Above 200 MA")
-- Confidence range: 40-90 (never claim certainty)
-- Always emphasize this is for educational purposes`;
+- Base all analysis on visible chart patterns, price action, candle structure, and market context
+- If no image is provided, generate a realistic and consistent analysis for the given pair based on common market conditions
+- patterns: identify specific candlestick and chart patterns (e.g. "Bullish Engulfing", "Head & Shoulders", "Double Bottom", "Bull Flag", "Descending Triangle")
+- indicators: identify RSI, MACD, MA cross signals if visible (e.g. "RSI Oversold at 28", "MACD Bullish Crossover", "Price above 200 EMA", "Volume Spike on Breakout")
+- Confidence range: 65-92 — be realistic and specific, not generic
+- Entry, stop loss and take profit must be specific price levels, not vague ranges
+- riskRewardRatio must reflect the entry/SL/TP math
+- reasoning must be professional and cover: trend direction, momentum, key confluences, risk factors
+- tradeManagement should mention risk per trade (e.g. 1-2% of account)`;
 
   try {
     let messages: OpenAI.Chat.ChatCompletionMessageParam[];
@@ -54,7 +63,7 @@ Rules:
           content: [
             {
               type: "text",
-              text: `Analyze this ${marketType ?? "crypto"} trading chart for ${pair ?? "Unknown"} on the ${timeframe ?? "1h"} timeframe. Provide a complete technical analysis.`,
+              text: `Perform a full professional technical analysis on this ${marketType ?? "crypto"} chart for ${pair ?? "Unknown"} on the ${timeframe ?? "1h"} timeframe. Identify all visible patterns, indicator signals, key levels, and provide specific entry, stop loss, and take profit levels. Be precise and professional.`,
             },
             {
               type: "image_url",
@@ -71,14 +80,14 @@ Rules:
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `Analyze the current market conditions for ${pair ?? "BTC/USDT"} on the ${timeframe ?? "1h"} timeframe in the ${marketType ?? "crypto"} market. Provide a realistic technical analysis based on common market conditions.`,
+          content: `Analyze the current market conditions for ${pair ?? "BTC/USDT"} on the ${timeframe ?? "1h"} timeframe in the ${marketType ?? "crypto"} market. Provide a complete and realistic professional technical analysis with specific price levels.`,
         },
       ];
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5.1",
-      max_completion_tokens: 1024,
+      model: "gpt-4.1",
+      max_completion_tokens: 1500,
       messages,
     });
 
@@ -100,11 +109,14 @@ Rules:
       entry: "N/A",
       stopLoss: "N/A",
       takeProfit: "N/A",
+      riskRewardRatio: "N/A",
       riskLevel: "medium",
       patterns: [],
       indicators: [],
+      keyLevels: { support: "N/A", resistance: "N/A" },
       strategy: "Analysis unavailable. Please try again.",
       reasoning: "The AI analysis could not be completed at this time.",
+      tradeManagement: "N/A",
     });
   }
 });

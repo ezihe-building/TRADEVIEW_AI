@@ -8,7 +8,7 @@ import { useColors } from "@/hooks/useColors";
 
 interface GlassCardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: ViewStyle | ViewStyle[] | (ViewStyle | undefined)[];
   glow?: "green" | "blue" | "red" | "none";
 }
 
