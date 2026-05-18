@@ -1,80 +1,99 @@
-import { BlurView } from "expo-blur";
 import { Tabs, router } from "expo-router";
-import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
 import React, { useEffect } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, Text } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
+
+function TVTabIcon({ name, label, focused, colors }: { name: string; label: string; focused: boolean; colors: any }) {
+  return (
+    <View style={[tabStyles.iconWrap, focused && tabStyles.iconWrapActive]}>
+      <Feather name={name as any} size={20} color={focused ? colors.foreground : colors.mutedForeground} />
+      <Text style={[tabStyles.label, { color: focused ? colors.foreground : colors.mutedForeground }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  iconWrap: { alignItems: "center", justifyContent: "center", gap: 3, paddingVertical: 6 },
+  iconWrapActive: {},
+  label: { fontFamily: "Inter_600SemiBold", fontSize: 10 },
+});
 
 export default function TabLayout() {
   const colors = useColors();
-  const isIOS = Platform.OS === "ios";
-  const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
   const { isSignedIn, isLoaded } = useAuth();
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      router.replace("/(auth)/sign-in");
+      router.replace("/");
     }
   }, [isLoaded, isSignedIn]);
+
+  const tabBarHeight = Platform.OS === "ios" ? 60 + insets.bottom : 60;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
         tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.card,
+          backgroundColor: "#1E222D",
           borderTopWidth: 1,
-          borderTopColor: colors.border,
+          borderTopColor: "#2A2E39",
+          height: tabBarHeight,
           elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
+          shadowOpacity: 0,
         },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-          ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card }]} />
-          ) : null,
-        tabBarLabelStyle: { fontFamily: "Inter_600SemiBold", fontSize: 10 },
+        tabBarShowLabel: false,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Dashboard",
-          tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={22} color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <TVTabIcon name="bookmark" label="Watchlist" focused={focused} colors={colors} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chart"
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TVTabIcon name="trending-up" label="Chart" focused={focused} colors={colors} />
+          ),
         }}
       />
       <Tabs.Screen
         name="markets"
         options={{
-          title: "Markets",
-          tabBarIcon: ({ color }) => <Feather name="trending-up" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="analyzer"
-        options={{
-          title: "Analyze",
-          tabBarIcon: ({ color }) => <Feather name="cpu" size={22} color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <TVTabIcon name="compass" label="Explore" focused={focused} colors={colors} />
+          ),
         }}
       />
       <Tabs.Screen
         name="journal"
         options={{
-          title: "Journal",
-          tabBarIcon: ({ color }) => <Feather name="book" size={22} color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <TVTabIcon name="users" label="Community" focused={focused} colors={colors} />
+          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
-          tabBarIcon: ({ color }) => <Feather name="settings" size={22} color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <TVTabIcon name="menu" label="Menu" focused={focused} colors={colors} />
+          ),
         }}
+      />
+      <Tabs.Screen
+        name="analyzer"
+        options={{ href: null }}
       />
     </Tabs>
   );

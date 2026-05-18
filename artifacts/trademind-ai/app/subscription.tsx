@@ -102,7 +102,7 @@ export default function SubscriptionScreen() {
 
   async function handleSelectPlan(tier: PlanTier) {
     if (tier === "free") {
-      setPlan({ tier: "free", interval: null });
+      setPlan("free");
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
       return;
@@ -145,7 +145,7 @@ export default function SubscriptionScreen() {
               {
                 text: "Activate Demo",
                 onPress: async () => {
-                  setPlan({ tier, interval: billing as BillingInterval });
+                  setPlan(tier, billing as BillingInterval);
                   await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   Alert.alert(
                     `${tier === "pro" ? "Pro" : "Base"} Plan Activated`,
@@ -192,7 +192,7 @@ export default function SubscriptionScreen() {
       const data = await res.json() as any;
 
       if (data.success) {
-        setPlan({ tier, interval: billing as BillingInterval });
+        setPlan(tier, billing as BillingInterval);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
           "Payment Successful!",
@@ -290,7 +290,7 @@ export default function SubscriptionScreen() {
               glow={isCurrent ? p.glow : "none"}
               style={[
                 styles.planCard,
-                isCurrent && { borderColor: p.color + "88", borderWidth: 1.5 },
+                isCurrent ? { borderColor: p.color + "88", borderWidth: 1.5 } : undefined,
               ]}
             >
               {p.badge && (

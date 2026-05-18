@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   Alert,
-  FlatList,
   Modal,
   Platform,
   ScrollView,
@@ -13,725 +12,399 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAnalysis } from "@/context/AnalysisContext";
-import { GlassCard } from "@/components/GlassCard";
-import { SentimentBadge } from "@/components/SentimentBadge";
 
-type Direction = "long" | "short";
-type Result = "win" | "loss" | "breakeven";
+type JournalFilter = "all" | "long" | "short" | "win" | "loss";
 
-interface JournalEntry {
+const MOCK_IDEAS = [
+  {
+    id: "idea1",
+    user: "CryptoWolf",
+    avatar: "C",
+    time: "2h ago",
+    pair: "BTC/USDT",
+    sentiment: "bullish" as const,
+    title: "BTC forming double bottom — long setup",
+    body: "Strong support at $65,800. RSI recovering from oversold. Target $72,000. Risk 1%.",
+    likes: 142, comments: 38,
+  },
+  {
+    id: "idea2",
+    user: "ForexKing",
+    avatar: "F",
+    time: "4h ago",
+    pair: "EUR/USD",
+    sentiment: "bearish" as const,
+    title: "EUR/USD weekly supply zone rejection",
+    body: "Price rejected at 1.0950 weekly supply. MACD bearish. Short to 1.0780.",
+    likes: 89, comments: 21,
+  },
+  {
+    id: "idea3",
+    user: "GoldBull",
+    avatar: "G",
+    time: "6h ago",
+    pair: "XAU/USD",
+    sentiment: "bullish" as const,
+    title: "Gold breakout above $2,380 resistance",
+    body: "Gold breaking key weekly resistance on high volume. Next target $2,420.",
+    likes: 211, comments: 54,
+  },
+  {
+    id: "idea4",
+    user: "TechTrader",
+    avatar: "T",
+    time: "8h ago",
+    pair: "NVDA",
+    sentiment: "bullish" as const,
+    title: "NVDA pre-earnings momentum play",
+    body: "Strong momentum into earnings. Options flow bullish. Target $950 short-term.",
+    likes: 176, comments: 42,
+  },
+];
+
+interface TradeNote {
   id: string;
-  analysisId: string;
   pair: string;
-  direction: Direction;
+  direction: "long" | "short";
   entry: string;
-  exit?: string;
-  result?: Result;
-  pnl?: string;
+  result: "win" | "loss" | "open";
+  pnl: string;
   notes: string;
-  timestamp: number;
-  sentiment: "bullish" | "bearish" | "neutral";
+  date: string;
 }
 
-export default function JournalScreen() {
+const MOCK_TRADES: TradeNote[] = [
+  { id: "t1", pair: "BTC/USDT", direction: "long", entry: "65200", result: "win", pnl: "+3.2%", notes: "Clean breakout trade.", date: "May 16" },
+  { id: "t2", pair: "EUR/USD", direction: "short", entry: "1.0932", result: "loss", pnl: "-1.0%", notes: "Stopped out on news spike.", date: "May 15" },
+  { id: "t3", pair: "SOL/USDT", direction: "long", entry: "158", result: "win", pnl: "+8.1%", notes: "AI signal confirmed breakout.", date: "May 14" },
+  { id: "t4", pair: "NVDA", direction: "long", entry: "842", result: "open", pnl: "+2.4%", notes: "Holding to earnings.", date: "May 13" },
+];
+
+export default function CommunityScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { analyses, journal, addJournalEntry, updateJournalEntry, deleteJournalEntry } =
-    useAnalysis();
+  const { analyses } = useAnalysis();
+  const topInset = Platform.OS === "web" ? 0 : insets.top;
 
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    pair: "",
-    direction: "long" as Direction,
-    entry: "",
-    exit: "",
-    result: undefined as Result | undefined,
-    pnl: "",
-    notes: "",
-  });
+  const [activeTab, setActiveTab] = useState<"ideas" | "journal">("ideas");
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [showNewNote, setShowNewNote] = useState(false);
+  const [notePair, setNotePair] = useState("");
+  const [noteText, setNoteText] = useState("");
 
-  const topInset = Platform.OS === "web" ? 67 : insets.top;
-
-  const stats = {
-    total: journal.length,
-    wins: journal.filter((j) => j.result === "win").length,
-    losses: journal.filter((j) => j.result === "loss").length,
-    winRate:
-      journal.length > 0
-        ? Math.round(
-            (journal.filter((j) => j.result === "win").length / journal.length) * 100
-          )
-        : 0,
-  };
-
-  function openAdd() {
-    setEditingId(null);
-    setForm({ pair: "", direction: "long", entry: "", exit: "", result: undefined, pnl: "", notes: "" });
-    setShowModal(true);
-  }
-
-  function openEdit(entry: JournalEntry) {
-    setEditingId(entry.id);
-    setForm({
-      pair: entry.pair,
-      direction: entry.direction,
-      entry: entry.entry,
-      exit: entry.exit ?? "",
-      result: entry.result,
-      pnl: entry.pnl ?? "",
-      notes: entry.notes,
+  function toggleLike(id: string) {
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
-    setShowModal(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
-  async function save() {
-    if (!form.pair.trim()) {
-      Alert.alert("Error", "Please enter a trading pair.");
-      return;
-    }
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    if (editingId) {
-      updateJournalEntry(editingId, {
-        pair: form.pair,
-        direction: form.direction,
-        entry: form.entry,
-        exit: form.exit || undefined,
-        result: form.result,
-        pnl: form.pnl || undefined,
-        notes: form.notes,
-      });
-    } else {
-      const newEntry: JournalEntry = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        analysisId: "",
-        pair: form.pair,
-        direction: form.direction,
-        entry: form.entry,
-        exit: form.exit || undefined,
-        result: form.result,
-        pnl: form.pnl || undefined,
-        notes: form.notes,
-        timestamp: Date.now(),
-        sentiment: form.direction === "long" ? "bullish" : "bearish",
-      };
-      addJournalEntry(newEntry);
-    }
-    setShowModal(false);
-  }
-
-  async function confirmDelete(id: string) {
-    Alert.alert("Delete Entry", "Remove this trade from your journal?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          deleteJournalEntry(id);
-        },
-      },
-    ]);
-  }
-
-  const resultConfig = {
-    win: { color: colors.bullish, icon: "check-circle" as const, label: "Win" },
-    loss: { color: colors.bearish, icon: "x-circle" as const, label: "Loss" },
-    breakeven: { color: colors.neutral, icon: "minus-circle" as const, label: "BE" },
-  };
+  const wins = MOCK_TRADES.filter((t) => t.result === "win").length;
+  const losses = MOCK_TRADES.filter((t) => t.result === "loss").length;
+  const winRate = MOCK_TRADES.length > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: topInset + 16,
-            borderBottomColor: colors.border,
-            backgroundColor: colors.background,
-          },
-        ]}
-      >
-        <Text style={[styles.title, { color: colors.foreground }]}>Trade Journal</Text>
+      <View style={[styles.topBar, { paddingTop: topInset + 12, backgroundColor: colors.background }]}>
+        <Text style={[styles.pageTitle, { color: colors.foreground }]}>Community</Text>
         <TouchableOpacity
-          style={[styles.addBtn, { backgroundColor: colors.primary }]}
-          onPress={openAdd}
-          activeOpacity={0.85}
+          style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => setShowNewNote(true)}
         >
-          <Feather name="plus" size={20} color={colors.primaryForeground} />
+          <Feather name="plus" size={18} color={colors.foreground} />
         </TouchableOpacity>
       </View>
 
-      {/* Stats */}
-      <View style={[styles.statsRow, { backgroundColor: colors.background }]}>
-        <StatPill label="Trades" value={stats.total.toString()} color={colors.accent} />
-        <StatPill label="Wins" value={stats.wins.toString()} color={colors.bullish} />
-        <StatPill label="Losses" value={stats.losses.toString()} color={colors.bearish} />
-        <StatPill label="Win Rate" value={`${stats.winRate}%`} color={colors.neutral} />
+      <View style={[styles.tabRow, { paddingHorizontal: 16 }]}>
+        {([
+          { key: "ideas", label: "Trade Ideas" },
+          { key: "journal", label: "My Journal" },
+        ] as const).map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[
+                styles.tab,
+                {
+                  borderBottomWidth: 2,
+                  borderBottomColor: active ? colors.primary : "transparent",
+                },
+              ]}
+              onPress={() => setActiveTab(tab.key)}
+            >
+              <Text style={[styles.tabText, { color: active ? colors.primary : colors.mutedForeground }]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {journal.length === 0 ? (
-        <View style={styles.emptyCenter}>
-          <GlassCard style={styles.emptyCard}>
-            <View
-              style={[
-                styles.emptyIcon,
-                { backgroundColor: colors.accent + "22", borderColor: colors.accent + "44" },
-              ]}
-            >
-              <Feather name="book" size={28} color={colors.accent} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-              No trades logged
-            </Text>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Log your trades to track performance and improve your strategy
-            </Text>
-            <TouchableOpacity
-              style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
-              onPress={openAdd}
-            >
-              <Feather name="plus" size={16} color={colors.primaryForeground} />
-              <Text style={[styles.emptyBtnText, { color: colors.primaryForeground }]}>
-                Log Trade
-              </Text>
-            </TouchableOpacity>
-          </GlassCard>
-        </View>
-      ) : (
-        <FlatList
-          data={journal}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const rc = item.result ? resultConfig[item.result] : null;
-            const dirColor =
-              item.direction === "long" ? colors.bullish : colors.bearish;
-            return (
-              <TouchableOpacity onPress={() => openEdit(item)} activeOpacity={0.8}>
-                <GlassCard
-                  glow={
-                    item.result === "win"
-                      ? "green"
-                      : item.result === "loss"
-                        ? "red"
-                        : "none"
-                  }
-                  style={styles.entryCard}
-                >
-                  <View style={styles.entryHeader}>
-                    <View style={styles.entryLeft}>
-                      <Text style={[styles.entryPair, { color: colors.foreground }]}>
-                        {item.pair}
-                      </Text>
-                      <View
-                        style={[
-                          styles.dirBadge,
-                          {
-                            backgroundColor: dirColor + "22",
-                            borderColor: dirColor + "55",
-                          },
-                        ]}
-                      >
-                        <Feather
-                          name={item.direction === "long" ? "arrow-up" : "arrow-down"}
-                          size={10}
-                          color={dirColor}
-                        />
-                        <Text
-                          style={[
-                            styles.dirText,
-                            { color: dirColor },
-                          ]}
-                        >
-                          {item.direction.toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.entryRight}>
-                      {rc ? (
-                        <View
-                          style={[
-                            styles.resultBadge,
-                            {
-                              backgroundColor: rc.color + "22",
-                              borderColor: rc.color + "55",
-                            },
-                          ]}
-                        >
-                          <Feather name={rc.icon} size={12} color={rc.color} />
-                          <Text style={[styles.resultText, { color: rc.color }]}>
-                            {rc.label}
-                          </Text>
-                        </View>
-                      ) : null}
-                      <TouchableOpacity
-                        onPress={() => confirmDelete(item.id)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Feather name="trash-2" size={14} color={colors.mutedForeground} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.levelRow}>
-                    {item.entry ? (
-                      <MiniLevel label="Entry" value={item.entry} color={colors.accent} />
-                    ) : null}
-                    {item.exit ? (
-                      <MiniLevel label="Exit" value={item.exit} color={colors.foreground} />
-                    ) : null}
-                    {item.pnl ? (
-                      <MiniLevel
-                        label="P&L"
-                        value={item.pnl}
-                        color={
-                          item.result === "win"
-                            ? colors.bullish
-                            : item.result === "loss"
-                              ? colors.bearish
-                              : colors.neutral
-                        }
-                      />
-                    ) : null}
-                  </View>
-
-                  {item.notes ? (
-                    <Text
-                      style={[styles.notes, { color: colors.mutedForeground }]}
-                      numberOfLines={2}
-                    >
-                      {item.notes}
-                    </Text>
-                  ) : null}
-
-                  <Text style={[styles.entryTime, { color: colors.mutedForeground }]}>
-                    {new Date(item.timestamp).toLocaleDateString()}
-                  </Text>
-                </GlassCard>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      )}
-
-      {/* Add/Edit Modal */}
-      <Modal
-        visible={showModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowModal(false)}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingBottom: 120 }]}
       >
-        <View style={[styles.modal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              {editingId ? "Edit Trade" : "Log Trade"}
-            </Text>
-            <TouchableOpacity onPress={() => setShowModal(false)}>
-              <Feather name="x" size={22} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.modalScroll}
-            contentContainerStyle={styles.modalContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            <FormField
-              label="Trading Pair"
-              value={form.pair}
-              onChangeText={(v) => setForm((f) => ({ ...f, pair: v }))}
-              placeholder="e.g. BTC/USDT"
-            />
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: colors.mutedForeground }]}>
-                Direction
-              </Text>
-              <View style={styles.toggleRow}>
-                {(["long", "short"] as Direction[]).map((d) => (
-                  <TouchableOpacity
-                    key={d}
-                    onPress={() => setForm((f) => ({ ...f, direction: d }))}
-                    style={[
-                      styles.toggle,
-                      {
-                        backgroundColor:
-                          form.direction === d
-                            ? (d === "long" ? colors.bullish : colors.bearish) + "33"
-                            : colors.surface,
-                        borderColor:
-                          form.direction === d
-                            ? d === "long"
-                              ? colors.bullish
-                              : colors.bearish
-                            : colors.border,
-                        flex: 1,
-                      },
-                    ]}
-                  >
-                    <Feather
-                      name={d === "long" ? "arrow-up" : "arrow-down"}
-                      size={14}
-                      color={
-                        form.direction === d
-                          ? d === "long"
-                            ? colors.bullish
-                            : colors.bearish
-                          : colors.mutedForeground
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        {
-                          color:
-                            form.direction === d
-                              ? d === "long"
-                                ? colors.bullish
-                                : colors.bearish
-                              : colors.mutedForeground,
-                        },
-                      ]}
-                    >
-                      {d.charAt(0).toUpperCase() + d.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+        {activeTab === "ideas" && (
+          <>
+            <TouchableOpacity
+              style={[styles.shareBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => setShowNewNote(true)}
+            >
+              <View style={[styles.shareBtnInner, { backgroundColor: colors.surface }]}>
+                <Feather name="edit-3" size={16} color={colors.mutedForeground} />
+                <Text style={[styles.shareBtnText, { color: colors.mutedForeground }]}>
+                  Share a trade idea…
+                </Text>
               </View>
-            </View>
+            </TouchableOpacity>
 
-            <FormField
-              label="Entry Price"
-              value={form.entry}
-              onChangeText={(v) => setForm((f) => ({ ...f, entry: v }))}
-              placeholder="e.g. 42500"
-              keyboardType="decimal-pad"
-            />
-            <FormField
-              label="Exit Price (optional)"
-              value={form.exit}
-              onChangeText={(v) => setForm((f) => ({ ...f, exit: v }))}
-              placeholder="e.g. 43800"
-              keyboardType="decimal-pad"
-            />
-            <FormField
-              label="P&L (optional)"
-              value={form.pnl}
-              onChangeText={(v) => setForm((f) => ({ ...f, pnl: v }))}
-              placeholder="e.g. +2.5% or +$125"
-            />
+            {MOCK_IDEAS.map((idea) => {
+              const sentColor = idea.sentiment === "bullish" ? colors.bullish : colors.bearish;
+              const liked = likedIds.has(idea.id);
+              return (
+                <View key={idea.id} style={[styles.ideaCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.ideaHeader}>
+                    <View style={[styles.userAvatar, { backgroundColor: colors.surface }]}>
+                      <Text style={[styles.userAvatarText, { color: colors.foreground }]}>{idea.avatar}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.userName, { color: colors.foreground }]}>{idea.user}</Text>
+                      <Text style={[styles.ideaTime, { color: colors.mutedForeground }]}>{idea.time}</Text>
+                    </View>
+                    <View style={[styles.pairBadge, { backgroundColor: sentColor + "22", borderColor: sentColor + "33" }]}>
+                      <Text style={[styles.pairBadgeText, { color: sentColor }]}>
+                        {idea.pair} · {idea.sentiment.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: colors.mutedForeground }]}>
-                Result (optional)
-              </Text>
-              <View style={styles.toggleRow}>
-                {(["win", "loss", "breakeven"] as Result[]).map((r) => {
-                  const rc = resultConfig[r];
-                  const active = form.result === r;
-                  return (
-                    <TouchableOpacity
-                      key={r}
-                      onPress={() =>
-                        setForm((f) => ({ ...f, result: active ? undefined : r }))
-                      }
-                      style={[
-                        styles.toggle,
-                        {
-                          backgroundColor: active ? rc.color + "22" : colors.surface,
-                          borderColor: active ? rc.color : colors.border,
-                          flex: 1,
-                        },
-                      ]}
-                    >
-                      <Feather
-                        name={rc.icon}
-                        size={12}
-                        color={active ? rc.color : colors.mutedForeground}
-                      />
-                      <Text
-                        style={[
-                          styles.toggleText,
-                          { color: active ? rc.color : colors.mutedForeground },
-                        ]}
-                      >
-                        {rc.label}
+                  <Text style={[styles.ideaTitle, { color: colors.foreground }]}>{idea.title}</Text>
+                  <Text style={[styles.ideaBody, { color: colors.mutedForeground }]}>{idea.body}</Text>
+
+                  <View style={[styles.ideaActions, { borderTopColor: colors.border }]}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => toggleLike(idea.id)}>
+                      <Feather name="heart" size={15} color={liked ? colors.bearish : colors.mutedForeground} />
+                      <Text style={[styles.actionText, { color: liked ? colors.bearish : colors.mutedForeground }]}>
+                        {idea.likes + (liked ? 1 : 0)}
                       </Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
+                      <Feather name="message-square" size={15} color={colors.mutedForeground} />
+                      <Text style={[styles.actionText, { color: colors.mutedForeground }]}>{idea.comments}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/(tabs)/chart" as any)}>
+                      <Feather name="bar-chart-2" size={15} color={colors.mutedForeground} />
+                      <Text style={[styles.actionText, { color: colors.mutedForeground }]}>View Chart</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </>
+        )}
 
-            <View style={styles.formGroup}>
-              <Text style={[styles.formLabel, { color: colors.mutedForeground }]}>
-                Notes
-              </Text>
-              <TextInput
-                value={form.notes}
-                onChangeText={(v) => setForm((f) => ({ ...f, notes: v }))}
-                placeholder="Trade setup, lessons learned..."
-                placeholderTextColor={colors.mutedForeground}
-                multiline
-                numberOfLines={4}
-                style={[
-                  styles.textarea,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    color: colors.foreground,
-                  },
-                ]}
-              />
+        {activeTab === "journal" && (
+          <>
+            <View style={styles.statsRow}>
+              <StatBox label="Total Trades" value={`${MOCK_TRADES.length + analyses.length}`} color={colors.foreground} colors={colors} />
+              <StatBox label="Win Rate" value={`${winRate}%`} color={winRate >= 50 ? colors.bullish : colors.bearish} colors={colors} />
+              <StatBox label="AI Signals" value={`${analyses.length}`} color={colors.primary} colors={colors} />
             </View>
 
             <TouchableOpacity
-              style={[styles.saveBtn, { backgroundColor: colors.primary }]}
-              onPress={save}
+              style={[styles.addTradeBtn, { backgroundColor: colors.primary }]}
+              onPress={() => setShowNewNote(true)}
               activeOpacity={0.85}
             >
-              <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
-                {editingId ? "Update Trade" : "Log Trade"}
-              </Text>
+              <Feather name="plus" size={16} color="#000" />
+              <Text style={[styles.addTradeBtnText, { color: "#000" }]}>Log a Trade</Text>
             </TouchableOpacity>
-          </ScrollView>
+
+            {MOCK_TRADES.map((trade) => {
+              const isWin = trade.result === "win";
+              const isOpen = trade.result === "open";
+              const color = isOpen ? colors.accent : isWin ? colors.bullish : colors.bearish;
+              return (
+                <View key={trade.id} style={[styles.tradeRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={[styles.tradeDir, { backgroundColor: (trade.direction === "long" ? colors.bullish : colors.bearish) + "22" }]}>
+                    <Feather
+                      name={trade.direction === "long" ? "arrow-up" : "arrow-down"}
+                      size={14}
+                      color={trade.direction === "long" ? colors.bullish : colors.bearish}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.tradePair, { color: colors.foreground }]}>{trade.pair}</Text>
+                    <Text style={[styles.tradeDate, { color: colors.mutedForeground }]}>{trade.date} · {trade.direction.toUpperCase()}</Text>
+                    {trade.notes ? (
+                      <Text style={[styles.tradeNotes, { color: colors.mutedForeground }]}>{trade.notes}</Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.tradeRight}>
+                    <Text style={[styles.tradePnl, { color }]}>{trade.pnl}</Text>
+                    <View style={[styles.resultBadge, { backgroundColor: color + "22" }]}>
+                      <Text style={[styles.resultText, { color }]}>{trade.result.toUpperCase()}</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+
+            {analyses.slice(0, 5).map((a) => {
+              const sentColor = a.sentiment === "bullish" ? colors.bullish : a.sentiment === "bearish" ? colors.bearish : colors.neutral;
+              return (
+                <TouchableOpacity
+                  key={a.id}
+                  style={[styles.aiSignalRow, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: sentColor }]}
+                  onPress={() => router.push({ pathname: "/analysis/[id]", params: { id: a.id } })}
+                  activeOpacity={0.75}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.tradePair, { color: colors.foreground }]}>{a.pair} · {a.timeframe}</Text>
+                    <Text style={[styles.tradeDate, { color: colors.mutedForeground }]}>
+                      AI Signal · {new Date(a.timestamp).toLocaleDateString()}
+                    </Text>
+                    <Text style={[styles.tradeNotes, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {a.reasoning}
+                    </Text>
+                  </View>
+                  <View style={[styles.resultBadge, { backgroundColor: sentColor + "22" }]}>
+                    <Text style={[styles.resultText, { color: sentColor }]}>{a.direction?.toUpperCase()}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </>
+        )}
+      </ScrollView>
+
+      <Modal visible={showNewNote} animationType="slide" transparent onRequestClose={() => setShowNewNote(false)}>
+        <View style={modalStyles.overlay}>
+          <TouchableOpacity style={modalStyles.dismiss} onPress={() => setShowNewNote(false)} />
+          <View style={[modalStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={modalStyles.handle} />
+            <Text style={[modalStyles.title, { color: colors.foreground }]}>New Trade Note</Text>
+            <TextInput
+              style={[modalStyles.input, { backgroundColor: colors.surface, color: colors.foreground, borderColor: colors.border }]}
+              value={notePair}
+              onChangeText={setNotePair}
+              placeholder="Symbol (e.g. BTC/USDT)"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="characters"
+            />
+            <TextInput
+              style={[modalStyles.textArea, { backgroundColor: colors.surface, color: colors.foreground, borderColor: colors.border }]}
+              value={noteText}
+              onChangeText={setNoteText}
+              placeholder="Add your notes, strategy, and result…"
+              placeholderTextColor={colors.mutedForeground}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            <TouchableOpacity
+              style={[modalStyles.saveBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                if (!notePair.trim()) {
+                  Alert.alert("Required", "Please enter a symbol.");
+                  return;
+                }
+                setNotePair("");
+                setNoteText("");
+                setShowNewNote(false);
+                Alert.alert("Saved!", "Trade note logged to your journal.");
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[modalStyles.saveBtnText, { color: "#000" }]}>Save Note</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
   );
 }
 
-function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  placeholder: string;
-  keyboardType?: any;
-}) {
-  const colors = useColors();
+function StatBox({ label, value, color, colors }: { label: string; value: string; color: string; colors: any }) {
   return (
-    <View style={styles.formGroup}>
-      <Text style={[styles.formLabel, { color: colors.mutedForeground }]}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.mutedForeground}
-        keyboardType={keyboardType}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            color: colors.foreground,
-          },
-        ]}
-      />
+    <View style={[statStyles.box, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[statStyles.value, { color }]}>{value}</Text>
+      <Text style={[statStyles.label, { color: colors.mutedForeground }]}>{label}</Text>
     </View>
   );
 }
+const statStyles = StyleSheet.create({
+  box: { flex: 1, alignItems: "center", padding: 14, borderRadius: 12, borderWidth: 1 },
+  value: { fontFamily: "Inter_700Bold", fontSize: 20 },
+  label: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 4 },
+});
 
-function MiniLevel({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
-  const colors = useColors();
-  return (
-    <View style={{ alignItems: "center", gap: 2 }}>
-      <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: colors.mutedForeground }}>
-        {label}
-      </Text>
-      <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 12, color }}>{value}</Text>
-    </View>
-  );
-}
-
-function StatPill({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
-  const colors = useColors();
-  return (
-    <View style={[styles.statPill, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text>
-    </View>
-  );
-}
+const modalStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: "flex-end" },
+  dismiss: { flex: 1 },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderBottomWidth: 0, padding: 24, gap: 14 },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#2A2E39", alignSelf: "center" },
+  title: { fontFamily: "Inter_700Bold", fontSize: 20 },
+  input: { borderRadius: 10, borderWidth: 1, padding: 13, fontFamily: "Inter_400Regular", fontSize: 14 },
+  textArea: { borderRadius: 10, borderWidth: 1, padding: 13, fontFamily: "Inter_400Regular", fontSize: 14, height: 120 },
+  saveBtn: { paddingVertical: 15, borderRadius: 12, alignItems: "center" },
+  saveBtnText: { fontFamily: "Inter_700Bold", fontSize: 15 },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
+  topBar: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end",
+    paddingHorizontal: 16, paddingBottom: 12,
   },
-  title: { fontFamily: "Inter_700Bold", fontSize: 24 },
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+  pageTitle: { fontFamily: "Inter_700Bold", fontSize: 26 },
+  iconBtn: { width: 38, height: 38, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  tabRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#2A2E39", marginBottom: 8 },
+  tab: { paddingHorizontal: 20, paddingVertical: 12 },
+  tabText: { fontFamily: "Inter_700Bold", fontSize: 15 },
+  scroll: { paddingHorizontal: 16, paddingTop: 8, gap: 12 },
+  shareBtn: { borderRadius: 12, borderWidth: 1, padding: 12 },
+  shareBtnInner: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 8 },
+  shareBtnText: { fontFamily: "Inter_400Regular", fontSize: 14 },
+  ideaCard: { borderRadius: 12, borderWidth: 1, padding: 16, gap: 10 },
+  ideaHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  userAvatar: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  userAvatarText: { fontFamily: "Inter_700Bold", fontSize: 14 },
+  userName: { fontFamily: "Inter_700Bold", fontSize: 14 },
+  ideaTime: { fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 1 },
+  pairBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+  pairBadgeText: { fontFamily: "Inter_700Bold", fontSize: 11 },
+  ideaTitle: { fontFamily: "Inter_700Bold", fontSize: 15 },
+  ideaBody: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 20 },
+  ideaActions: {
+    flexDirection: "row", gap: 20, paddingTop: 10, borderTopWidth: 1,
   },
-  statsRow: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
+  actionText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  statsRow: { flexDirection: "row", gap: 10 },
+  addTradeBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 13, borderRadius: 12,
   },
-  statPill: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 2,
+  addTradeBtnText: { fontFamily: "Inter_700Bold", fontSize: 15 },
+  tradeRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, borderWidth: 1 },
+  tradeDir: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  tradePair: { fontFamily: "Inter_700Bold", fontSize: 14 },
+  tradeDate: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 2 },
+  tradeNotes: { fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 3 },
+  tradeRight: { alignItems: "flex-end", gap: 4 },
+  tradePnl: { fontFamily: "Inter_700Bold", fontSize: 15 },
+  resultBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
+  resultText: { fontFamily: "Inter_700Bold", fontSize: 10 },
+  aiSignalRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14, borderRadius: 12, borderWidth: 1, borderLeftWidth: 3,
   },
-  statValue: { fontFamily: "Inter_700Bold", fontSize: 16 },
-  statLabel: { fontFamily: "Inter_400Regular", fontSize: 10 },
-  list: { paddingHorizontal: 16, paddingTop: 12, gap: 10, paddingBottom: 100 },
-  emptyCenter: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 40,
-  },
-  emptyCard: { padding: 32, alignItems: "center", gap: 12 },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: { fontFamily: "Inter_700Bold", fontSize: 18 },
-  emptyText: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  emptyBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 4,
-  },
-  emptyBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
-  entryCard: { gap: 10 },
-  entryHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  entryLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  entryPair: { fontFamily: "Inter_700Bold", fontSize: 16 },
-  dirBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  dirText: { fontFamily: "Inter_700Bold", fontSize: 10, letterSpacing: 0.5 },
-  entryRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  resultBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  resultText: { fontFamily: "Inter_700Bold", fontSize: 11 },
-  levelRow: { flexDirection: "row", gap: 20 },
-  notes: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    lineHeight: 18,
-    fontStyle: "italic",
-  },
-  entryTime: { fontFamily: "Inter_400Regular", fontSize: 11 },
-  modal: { flex: 1 },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingTop: 20,
-    borderBottomWidth: 1,
-  },
-  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 20 },
-  modalScroll: { flex: 1 },
-  modalContent: { padding: 20, gap: 16 },
-  formGroup: { gap: 8 },
-  formLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: "Inter_400Regular",
-    fontSize: 15,
-  },
-  textarea: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: "Inter_400Regular",
-    fontSize: 15,
-    height: 100,
-    textAlignVertical: "top",
-  },
-  toggleRow: { flexDirection: "row", gap: 8 },
-  toggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  toggleText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
-  saveBtn: {
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  saveBtnText: { fontFamily: "Inter_700Bold", fontSize: 16 },
 });
