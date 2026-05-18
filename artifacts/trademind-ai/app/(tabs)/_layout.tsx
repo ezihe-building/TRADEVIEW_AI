@@ -38,6 +38,7 @@ export default function TabLayout() {
           ) : isWeb ? (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card }]} />
           ) : null,
+        tabBarLabelStyle: { fontFamily: "Inter_600SemiBold", fontSize: 10 },
       }}
     >
       <Tabs.Screen
@@ -45,6 +46,13 @@ export default function TabLayout() {
         options={{
           title: "Dashboard",
           tabBarIcon: ({ color }) => <Feather name="bar-chart-2" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="markets"
+        options={{
+          title: "Markets",
+          tabBarIcon: ({ color }) => <Feather name="trending-up" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

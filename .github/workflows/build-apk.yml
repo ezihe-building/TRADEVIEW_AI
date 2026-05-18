@@ -1,0 +1,90 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile (preview=APK, production=AAB)'
+        required: false
+        default: 'preview'
+
+jobs:
+  build:
+    name: Build APK with EAS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Write Clerk publishable key to .env.local
+        run: |
+          echo "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }}" > artifacts/trademind-ai/.env.local
+
+      - name: Build APK via EAS
+        working-directory: artifacts/trademind-ai
+        run: eas build --platform android --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive --output ./build.apk
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trademind-ai-apk
+          path: artifacts/trademind-ai/build.apk
+          retention-days: 30
+
+      - name: Create GitHub Release on main push
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: TradeMind AI v${{ github.run_number }}
+          body: |
+            ## TradeMind AI - Automated Build
+
+            **Build #${{ github.run_number }}** from commit `${{ github.sha }}`
+
+            ### Download
+            Download the APK below and install on your Android device.
+            Enable "Install from unknown sources" in Settings > Security first.
+
+            ### What's New
+            - AI-powered chart analysis
+            - Live market prices (Crypto + Forex)
+            - Free / Base / Pro subscription plans
+            - Push notifications for market signals
+          files: artifacts/trademind-ai/build.apk
+          draft: false
+          prerelease: false

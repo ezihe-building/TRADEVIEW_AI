@@ -19,10 +19,32 @@ import { useColors } from "@/hooks/useColors";
 import { useAnalysis, type TradeAnalysis } from "@/context/AnalysisContext";
 import { useSubscription } from "@/context/SubscriptionContext";
 import { GlassCard } from "@/components/GlassCard";
-import { MarketTypeSelector } from "@/components/MarketTypeSelector";
-import { TimeframeSelector } from "@/components/TimeframeSelector";
 
 type MarketType = "crypto" | "forex" | "stocks" | "indices";
+
+const PAIRS: Record<MarketType, string[]> = {
+  crypto: [
+    "BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT",
+    "DOGE/USDT", "ADA/USDT", "AVAX/USDT", "DOT/USDT", "LINK/USDT",
+    "LTC/USDT", "UNI/USDT", "MATIC/USDT", "ATOM/USDT",
+  ],
+  forex: [
+    "EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD",
+    "USD/CHF", "NZD/USD", "EUR/GBP", "EUR/JPY", "GBP/JPY",
+    "XAU/USD", "XAG/USD",
+  ],
+  stocks: ["AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOGL", "META", "NFLX"],
+  indices: ["SPX500", "NASDAQ", "DOW", "FTSE100", "DAX", "NIKKEI225"],
+};
+
+const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1D", "1W"];
+
+const MARKET_TABS: { key: MarketType; label: string; icon: string }[] = [
+  { key: "crypto", label: "Crypto", icon: "trending-up" },
+  { key: "forex", label: "Forex", icon: "dollar-sign" },
+  { key: "stocks", label: "Stocks", icon: "bar-chart" },
+  { key: "indices", label: "Indices", icon: "activity" },
+];
 
 export default function AnalyzerScreen() {
   const colors = useColors();
@@ -63,10 +85,10 @@ export default function AnalyzerScreen() {
     }
     if (!isPro && plan.tier !== "base") {
       Alert.alert(
-        "Pro Feature",
+        "Base+ Feature",
         "Live camera scanning is available on Base and Pro plans.",
         [
-          { text: "Cancel", style: "cancel" },
+          { text: "Later", style: "cancel" },
           { text: "Upgrade", onPress: () => router.push("/subscription") },
         ]
       );
@@ -74,11 +96,7 @@ export default function AnalyzerScreen() {
     }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(
-        "Camera Permission Required",
-        "Please allow camera access in your device settings to use live chart scanning.",
-        [{ text: "OK" }]
-      );
+      Alert.alert("Camera Access Required", "Please allow camera access to scan charts live.");
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -94,15 +112,11 @@ export default function AnalyzerScreen() {
   }
 
   async function analyzeChart() {
-    if (!imageBase64 && !imageUri) {
-      Alert.alert("No chart", "Please upload or capture a chart first.");
-      return;
-    }
-
     if (!canScan) {
+      const limit = plan.tier === "free" ? 3 : 15;
       Alert.alert(
         "Daily Limit Reached",
-        `You've used all ${plan.tier === "free" ? 3 : 15} free scans for today. Upgrade for more.`,
+        `You've used all ${limit} scans for today. Upgrade to get more.`,
         [
           { text: "Later", style: "cancel" },
           { text: "Upgrade Now", onPress: () => router.push("/subscription") },
@@ -116,26 +130,37 @@ export default function AnalyzerScreen() {
 
     try {
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      const url = `https://${domain}/api/analyze-chart`;
+      const url = Platform.OS === "web"
+        ? "/api/analyze-chart"
+        : `https://${domain}/api/analyze-chart`;
 
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64, imageUri, pair, timeframe, marketType }),
+        body: JSON.stringify({
+          imageBase64: imageBase64 ?? undefined,
+          imageUri: imageUri ?? undefined,
+          pair,
+          timeframe,
+          marketType,
+        }),
       });
 
-      if (!response.ok) throw new Error(`Analysis failed: ${response.status}`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({})) as any;
+        throw new Error(errData?.error ?? `Analysis failed: ${response.status}`);
+      }
 
-      const data = await response.json();
+      const data = await response.json() as any;
       const analysis: TradeAnalysis & Record<string, any> = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
         imageUri: imageUri ?? "",
         timestamp: Date.now(),
         pair,
         timeframe,
         marketType,
         sentiment: data.sentiment ?? "neutral",
-        confidence: data.confidence ?? 70,
+        confidence: data.confidence ?? 72,
         direction: data.direction ?? "wait",
         entry: data.entry ?? "N/A",
         stopLoss: data.stopLoss ?? "N/A",
@@ -153,25 +178,19 @@ export default function AnalyzerScreen() {
       useOneScan();
       addAnalysis(analysis);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
       router.push({ pathname: "/analysis/[id]", params: { id: analysis.id } });
-
       setImageUri(null);
       setImageBase64(null);
-    } catch (err) {
+    } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Analysis Failed", "Could not analyze the chart. Please check your connection and try again.");
+      Alert.alert(
+        "Analysis Failed",
+        err?.message ?? "Could not analyze. Check your connection and try again."
+      );
     } finally {
       setAnalyzing(false);
     }
   }
-
-  const PAIRS: Record<MarketType, string[]> = {
-    crypto: ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"],
-    forex: ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/USD", "USD/CAD"],
-    stocks: ["AAPL", "TSLA", "NVDA", "MSFT", "AMZN"],
-    indices: ["SPX500", "NASDAQ", "DOW", "FTSE100", "DAX"],
-  };
 
   const scansLabel = isPro ? "Unlimited" : `${scansRemaining} left today`;
   const scansBgColor = scansRemaining <= 1 && !isPro ? colors.bearish + "22" : colors.primary + "15";
@@ -200,20 +219,20 @@ export default function AnalyzerScreen() {
         </View>
 
         {imageUri ? (
-          <View>
+          <GlassCard style={styles.imageCard}>
             <Image
               source={{ uri: imageUri }}
-              style={[styles.chartImage, { borderColor: colors.primary + "66" }]}
+              style={styles.chartImage}
               resizeMode="contain"
             />
             <TouchableOpacity
-              style={[styles.clearBtn, { borderColor: colors.border }]}
+              style={[styles.clearBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
               onPress={() => { setImageUri(null); setImageBase64(null); }}
             >
-              <Feather name="x" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.clearText, { color: colors.mutedForeground }]}>Remove</Text>
+              <Feather name="x" size={14} color={colors.mutedForeground} />
+              <Text style={[styles.clearText, { color: colors.mutedForeground }]}>Remove Chart</Text>
             </TouchableOpacity>
-          </View>
+          </GlassCard>
         ) : (
           <View style={styles.uploadRow}>
             <TouchableOpacity
@@ -251,67 +270,127 @@ export default function AnalyzerScreen() {
               <Text style={[styles.uploadTitle, { color: isPro || plan.tier === "base" ? colors.foreground : colors.mutedForeground }]}>
                 Live Scan
               </Text>
-              {!isPro && plan.tier !== "base" && (
-                <View style={[styles.lockBadge, { backgroundColor: colors.neutral + "22" }]}>
-                  <Feather name="lock" size={10} color={colors.mutedForeground} />
-                  <Text style={[styles.lockText, { color: colors.mutedForeground }]}>Base+</Text>
-                </View>
-              )}
-              {(isPro || plan.tier === "base") && (
-                <Text style={[styles.uploadSub, { color: colors.mutedForeground }]}>Live camera</Text>
-              )}
+              <Text style={[styles.uploadSub, { color: colors.mutedForeground }]}>
+                {isPro || plan.tier === "base" ? "Camera" : "Base+"}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.foreground }]}>Market</Text>
-          <View style={styles.negativeMargin}>
-            <MarketTypeSelector selected={marketType} onSelect={(m) => {
-              setMarketType(m);
-              const pairs = PAIRS[m];
-              if (pairs.length > 0) setPairState(pairs[0]);
-            }} />
+        <GlassCard style={styles.configCard}>
+          <Text style={[styles.configLabel, { color: colors.mutedForeground }]}>Market Type</Text>
+          <View style={styles.marketTabs}>
+            {MARKET_TABS.map((m) => {
+              const isActive = marketType === m.key;
+              return (
+                <TouchableOpacity
+                  key={m.key}
+                  style={[
+                    styles.marketTab,
+                    {
+                      backgroundColor: isActive ? colors.primary : colors.surface,
+                      borderColor: isActive ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    setMarketType(m.key);
+                    setPairState(PAIRS[m.key][0]);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Feather
+                    name={m.icon as any}
+                    size={13}
+                    color={isActive ? colors.primaryForeground : colors.mutedForeground}
+                  />
+                  <Text style={[
+                    styles.marketTabText,
+                    { color: isActive ? colors.primaryForeground : colors.mutedForeground },
+                  ]}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </View>
+        </GlassCard>
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.foreground }]}>Trading Pair</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pairScroll}>
-            {PAIRS[marketType].map((p) => (
-              <TouchableOpacity
-                key={p}
-                onPress={() => setPairState(p)}
-                style={[
-                  styles.pairPill,
-                  {
-                    backgroundColor: pair === p ? colors.primary + "22" : colors.surface,
-                    borderColor: pair === p ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.pairLabel, { color: pair === p ? colors.primary : colors.mutedForeground }]}>
-                  {p}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        <GlassCard style={styles.configCard}>
+          <Text style={[styles.configLabel, { color: colors.mutedForeground }]}>Trading Pair</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pairsScroll}>
+            {PAIRS[marketType].map((p) => {
+              const isActive = pair === p;
+              return (
+                <TouchableOpacity
+                  key={p}
+                  style={[
+                    styles.pairChip,
+                    {
+                      backgroundColor: isActive ? colors.primary + "22" : colors.surface,
+                      borderColor: isActive ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => setPairState(p)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.pairChipText,
+                    { color: isActive ? colors.primary : colors.mutedForeground },
+                  ]}>
+                    {p}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
-        </View>
+        </GlassCard>
 
-        <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.foreground }]}>Timeframe</Text>
-          <View style={styles.negativeMargin}>
-            <TimeframeSelector selected={timeframe} onSelect={setTimeframe} />
+        <GlassCard style={styles.configCard}>
+          <Text style={[styles.configLabel, { color: colors.mutedForeground }]}>Timeframe</Text>
+          <View style={styles.timeframeRow}>
+            {TIMEFRAMES.map((tf) => {
+              const isActive = timeframe === tf;
+              return (
+                <TouchableOpacity
+                  key={tf}
+                  style={[
+                    styles.tfChip,
+                    {
+                      backgroundColor: isActive ? colors.primary : colors.surface,
+                      borderColor: isActive ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => setTimeframe(tf)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.tfChipText,
+                    { color: isActive ? colors.primaryForeground : colors.mutedForeground },
+                  ]}>
+                    {tf}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </View>
+        </GlassCard>
+
+        {!imageUri && (
+          <GlassCard style={[styles.noChartHint, { borderColor: colors.primary + "33" }]}>
+            <Feather name="info" size={15} color={colors.primary} />
+            <Text style={[styles.noChartText, { color: colors.mutedForeground }]}>
+              <Text style={{ color: colors.foreground }}>No chart? No problem.</Text>
+              {" "}AI will analyze {pair} on the {timeframe} timeframe using market structure logic.
+            </Text>
+          </GlassCard>
+        )}
 
         <TouchableOpacity
           style={[
             styles.analyzeBtn,
             {
-              backgroundColor: imageUri ? colors.primary : colors.surface,
-              borderColor: imageUri ? colors.primary : colors.border,
-              opacity: analyzing ? 0.7 : 1,
+              backgroundColor: analyzing ? colors.primary + "88" : colors.primary,
+              opacity: analyzing ? 0.9 : 1,
             },
           ]}
           onPress={analyzeChart}
@@ -319,34 +398,21 @@ export default function AnalyzerScreen() {
           activeOpacity={0.85}
         >
           {analyzing ? (
-            <>
-              <ActivityIndicator color={imageUri ? colors.primaryForeground : colors.mutedForeground} />
-              <Text style={[styles.analyzeBtnText, { color: imageUri ? colors.primaryForeground : colors.mutedForeground }]}>
-                Analyzing...
+            <View style={styles.analyzingRow}>
+              <ActivityIndicator size="small" color={colors.primaryForeground} />
+              <Text style={[styles.analyzeBtnText, { color: colors.primaryForeground }]}>
+                Analyzing {pair}...
               </Text>
-            </>
+            </View>
           ) : (
-            <>
-              <Feather name="cpu" size={20} color={imageUri ? colors.primaryForeground : colors.mutedForeground} />
-              <Text style={[styles.analyzeBtnText, { color: imageUri ? colors.primaryForeground : colors.mutedForeground }]}>
-                Analyze with AI
+            <View style={styles.analyzingRow}>
+              <Feather name="cpu" size={18} color={colors.primaryForeground} />
+              <Text style={[styles.analyzeBtnText, { color: colors.primaryForeground }]}>
+                Analyze {pair} — {timeframe}
               </Text>
-            </>
+            </View>
           )}
         </TouchableOpacity>
-
-        {!canScan && (
-          <TouchableOpacity
-            style={[styles.upgradePrompt, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "44" }]}
-            onPress={() => router.push("/subscription")}
-          >
-            <Feather name="zap" size={16} color={colors.primary} />
-            <Text style={[styles.upgradePromptText, { color: colors.primary }]}>
-              Daily limit reached — Upgrade for more scans
-            </Text>
-            <Feather name="arrow-right" size={14} color={colors.primary} />
-          </TouchableOpacity>
-        )}
       </ScrollView>
     </View>
   );
@@ -354,51 +420,68 @@ export default function AnalyzerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 20, gap: 20 },
+  scroll: { paddingHorizontal: 20, gap: 16 },
   titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   title: { fontFamily: "Inter_700Bold", fontSize: 24 },
-  subtitle: { fontFamily: "Inter_400Regular", fontSize: 13, marginTop: 2 },
+  subtitle: { fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 3 },
   scansBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
   },
   scansText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
-  chartImage: { width: "100%", height: 200, borderRadius: 12, borderWidth: 1.5 },
+  imageCard: { padding: 8, gap: 8 },
+  chartImage: { width: "100%", height: 220, borderRadius: 10 },
   clearBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1, marginTop: 8,
+    gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
   },
   clearText: { fontFamily: "Inter_400Regular", fontSize: 13 },
   uploadRow: { flexDirection: "row", gap: 12 },
   uploadBtn: {
-    flex: 1, borderRadius: 16, borderWidth: 1, padding: 20,
-    alignItems: "center", gap: 10, borderStyle: "dashed",
+    flex: 1, alignItems: "center", gap: 10, paddingVertical: 24,
+    borderRadius: 16, borderWidth: 1.5, borderStyle: "dashed",
   },
   uploadIcon: {
-    width: 48, height: 48, borderRadius: 14, borderWidth: 1,
+    width: 52, height: 52, borderRadius: 16, borderWidth: 1,
     alignItems: "center", justifyContent: "center",
   },
-  uploadTitle: { fontFamily: "Inter_700Bold", fontSize: 14 },
-  uploadSub: { fontFamily: "Inter_400Regular", fontSize: 12 },
-  lockBadge: {
-    flexDirection: "row", alignItems: "center", gap: 3,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+  uploadTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  uploadSub: { fontFamily: "Inter_400Regular", fontSize: 11 },
+  configCard: { gap: 12 },
+  configLabel: { fontFamily: "Inter_600SemiBold", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.8 },
+  marketTabs: { flexDirection: "row", gap: 8 },
+  marketTab: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 5, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
   },
-  lockText: { fontFamily: "Inter_600SemiBold", fontSize: 10 },
-  section: { gap: 10 },
-  sectionLabel: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
-  negativeMargin: { marginHorizontal: -20 },
-  pairScroll: { gap: 8 },
-  pairPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
-  pairLabel: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  marketTabText: { fontFamily: "Inter_600SemiBold", fontSize: 12 },
+  pairsScroll: { marginHorizontal: -4 },
+  pairChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+    marginHorizontal: 4, borderWidth: 1,
+  },
+  pairChipText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  timeframeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  tfChip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1, minWidth: 48, alignItems: "center",
+  },
+  tfChipText: { fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  noChartHint: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    paddingVertical: 14, paddingHorizontal: 16,
+    borderWidth: 1,
+  },
+  noChartText: { fontFamily: "Inter_400Regular", fontSize: 13, flex: 1, lineHeight: 19 },
   analyzeBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 10, paddingVertical: 16, borderRadius: 14, borderWidth: 1, marginTop: 4,
+    paddingVertical: 18, borderRadius: 16,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#00FF88",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
+  analyzingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   analyzeBtnText: { fontFamily: "Inter_700Bold", fontSize: 16 },
-  upgradePrompt: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    padding: 14, borderRadius: 12, borderWidth: 1,
-  },
-  upgradePromptText: { fontFamily: "Inter_600SemiBold", fontSize: 13, flex: 1 },
 });

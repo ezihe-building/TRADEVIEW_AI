@@ -18,6 +18,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AnalysisProvider } from "@/context/AnalysisContext";
 import { SubscriptionProvider } from "@/context/SubscriptionContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -73,9 +74,11 @@ export default function RootLayout() {
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
                   <SubscriptionProvider>
-                    <AnalysisProvider>
-                      <RootLayoutNav />
-                    </AnalysisProvider>
+                    <NotificationProvider>
+                      <AnalysisProvider>
+                        <RootLayoutNav />
+                      </AnalysisProvider>
+                    </NotificationProvider>
                   </SubscriptionProvider>
                 </KeyboardProvider>
               </GestureHandlerRootView>
