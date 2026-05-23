@@ -1,21 +1,21 @@
 const colors = {
   dark: {
-    text: "#D1D4DC",
+    text: "#E0E3EB",
     tint: "#00FF88",
 
-    background: "#131722",
-    foreground: "#D1D4DC",
+    background: "#000000",
+    foreground: "#E0E3EB",
 
-    card: "#1E222D",
-    cardForeground: "#D1D4DC",
+    card: "#0D0D12",
+    cardForeground: "#E0E3EB",
 
     primary: "#00FF88",
     primaryForeground: "#000000",
 
-    secondary: "#2A2E39",
-    secondaryForeground: "#D1D4DC",
+    secondary: "#161620",
+    secondaryForeground: "#E0E3EB",
 
-    muted: "#1E222D",
+    muted: "#0D0D12",
     mutedForeground: "#787B86",
 
     accent: "#2962FF",
@@ -24,16 +24,16 @@ const colors = {
     destructive: "#F23645",
     destructiveForeground: "#ffffff",
 
-    border: "#2A2E39",
-    input: "#1E222D",
+    border: "#1E1E2A",
+    input: "#0D0D12",
 
     bullish: "#089981",
     bearish: "#F23645",
     neutral: "#B2B5BE",
     glow: "#00FF8820",
     glowBlue: "#2962FF20",
-    surface: "#2A2E39",
-    surfaceHigh: "#363A45",
+    surface: "#161620",
+    surfaceHigh: "#1E1E2A",
   },
 
   radius: 8,
