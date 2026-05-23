@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Alert,
+  Animated,
   Modal,
   Platform,
   ScrollView,
@@ -90,6 +91,15 @@ export default function CommunityScreen() {
   const { analyses } = useAnalysis();
   const topInset = Platform.OS === "web" ? 0 : insets.top;
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(28)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 80, friction: 12, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
   const [activeTab, setActiveTab] = useState<"ideas" | "journal">("ideas");
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [showNewNote, setShowNewNote] = useState(false);
@@ -110,7 +120,7 @@ export default function CommunityScreen() {
   const winRate = MOCK_TRADES.length > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <Animated.View style={[styles.container, { backgroundColor: colors.background, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
       <View style={[styles.topBar, { paddingTop: topInset + 12, backgroundColor: colors.background }]}>
         <Text style={[styles.pageTitle, { color: colors.foreground }]}>Community</Text>
         <TouchableOpacity
@@ -328,7 +338,7 @@ export default function CommunityScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 
