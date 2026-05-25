@@ -6,6 +6,8 @@ import React, {
   useState,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useUser } from "@clerk/expo";
+import { PLAN_OVERRIDES } from "@/config/dev-overrides";
 
 export type PlanTier = "free" | "base" | "pro";
 export type BillingInterval = "weekly" | "monthly";
@@ -43,7 +45,18 @@ function getTodayString() {
   return new Date().toISOString().split("T")[0];
 }
 
+function getOverrideTier(email: string | undefined): PlanTier | null {
+  if (!email) return null;
+  const today = getTodayString();
+  const match = PLAN_OVERRIDES.find(
+    (o) => o.email.toLowerCase() === email.toLowerCase() &&
+      (!o.expiresAt || o.expiresAt >= today)
+  );
+  return match ? match.tier : null;
+}
+
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useUser();
   const [plan, setPlanState] = useState<SubscriptionPlan>({
     tier: "free",
     scansUsedToday: 0,
@@ -67,6 +80,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     })();
   }, []);
 
+  const email = user?.emailAddresses[0]?.emailAddress;
+  const overrideTier = getOverrideTier(email);
+
   const savePlan = useCallback((updated: SubscriptionPlan) => {
     setPlanState(updated);
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -89,15 +105,18 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     });
   }, [savePlan, plan]);
 
+  const effectiveTier: PlanTier = overrideTier ?? plan.tier;
+
   const today = getTodayString();
   const currentScansUsed =
     plan.scansResetDate === today ? plan.scansUsedToday : 0;
-  const limit = SCAN_LIMITS[plan.tier];
+  const limit = SCAN_LIMITS[effectiveTier];
   const scansRemaining = limit === Infinity ? 999 : Math.max(0, limit - currentScansUsed);
-  const canScan = plan.tier === "pro" || currentScansUsed < limit;
+  const canScan = effectiveTier === "pro" || currentScansUsed < limit;
 
   const useOneScan = useCallback((): boolean => {
     if (!canScan) return false;
+    if (effectiveTier === "pro") return true;
     const today2 = getTodayString();
     const newUsed =
       (plan.scansResetDate === today2 ? plan.scansUsedToday : 0) + 1;
@@ -107,15 +126,15 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       scansResetDate: today2,
     });
     return true;
-  }, [canScan, plan, savePlan]);
+  }, [canScan, effectiveTier, plan, savePlan]);
 
   return (
     <SubscriptionContext.Provider
       value={{
-        plan,
-        isPro: plan.tier === "pro",
-        isBase: plan.tier === "base",
-        isPaid: plan.tier !== "free",
+        plan: { ...plan, tier: effectiveTier },
+        isPro: effectiveTier === "pro",
+        isBase: effectiveTier === "base",
+        isPaid: effectiveTier !== "free",
         scansRemaining,
         canScan,
         useOneScan,
