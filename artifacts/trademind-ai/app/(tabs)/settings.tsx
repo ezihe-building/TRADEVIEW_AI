@@ -237,9 +237,9 @@ export default function MenuScreen() {
               <Text style={[s.menuLabel, { color: colors.foreground }]}>About</Text>
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginLeft: "auto" }} />
             </TouchableOpacity>
-          </View>
 
-          <View style={[s.menuList, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[s.menuDivider, { backgroundColor: colors.border }]} />
+
             <TouchableOpacity style={s.menuItem} onPress={handleSignOut} activeOpacity={0.7}>
               <View style={s.menuIconWrap}>
                 <Feather name="log-out" size={19} color={colors.bearish} />
