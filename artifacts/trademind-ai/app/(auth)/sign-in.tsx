@@ -40,7 +40,7 @@ export default function SignInScreen() {
   const insets = useSafeAreaInsets();
   const { signIn, errors, fetchStatus } = useSignIn();
   const { startSSOFlow } = useSSO();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
 
   const [mode, setMode] = useState<"landing" | "signin">("landing");
   const [email, setEmail] = useState("");
