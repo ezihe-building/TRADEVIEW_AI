@@ -81,8 +81,8 @@ export default function SignInScreen() {
   }, []);
 
   useEffect(() => {
-    if (isSignedIn) router.replace("/(tabs)");
-  }, [isSignedIn]);
+    if (isLoaded && isSignedIn) router.replace("/(tabs)");
+  }, [isLoaded, isSignedIn]);
 
   function showSignInForm() {
     setMode("signin");
