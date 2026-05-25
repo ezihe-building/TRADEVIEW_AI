@@ -69,11 +69,10 @@ export default function MenuScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           try {
-            await signOut();
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           } catch {}
-          router.replace("/(auth)/sign-in");
+          await signOut();
         },
       },
     ]);
